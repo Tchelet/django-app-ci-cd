@@ -1,65 +1,55 @@
 pipeline {
-    
-    agent any 
-    
+    agent any
+
     environment {
+        IMAGE_NAME = "tchelet/cicd"
         IMAGE_TAG = "${BUILD_NUMBER}"
+        REGISTRY_CREDENTIALS = 'ea6ea248-89fc-40c6-8cbb-a2fa518887cc	'  // Docker Hub credentials ID
+        GIT_CREDENTIALS = '9955446b-dc74-40aa-b7e3-bfa9e8071c0a'          // GitHub credentials ID
+        MANIFESTS_REPO = 'https://github.com/Tchelet/django-app-ci-cd-manifests.git'
+        MANIFESTS_BRANCH = 'main'
     }
-    
+
     stages {
-        
-        stage('Checkout'){
-           steps {
-                git credentialsId: 'f1a818fc-b659-4332-a212-bc76585b7f0c', 
-                url: 'https://github.com/iam-veeramalla/cicd-end-to-end',
-                branch: 'main'
-           }
+        stage('Checkout Application Code') {
+            steps {
+                git credentialsId: env.GIT_CREDENTIALS, url: 'https://github.com/Tchelet/django-app-ci-cd.git', branch: 'main'
+            }
         }
 
-        stage('Build Docker'){
-            steps{
-                script{
-                    sh '''
-                    echo 'Buid Docker Image'
-                    docker build -t abhishekf5/cicd-e2e:${BUILD_NUMBER} .
-                    '''
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} ."
                 }
             }
         }
 
-        stage('Push the artifacts'){
-           steps{
-                script{
-                    sh '''
-                    echo 'Push to Repo'
-                    docker push abhishekf5/cicd-e2e:${BUILD_NUMBER}
-                    '''
-                }
-            }
-        }
-        
-        stage('Checkout K8S manifest SCM'){
+        stage('Push Docker Image') {
             steps {
-                git credentialsId: 'f87a34a8-0e09-45e7-b9cf-6dc68feac670', 
-                url: 'https://github.com/iam-veeramalla/cicd-demo-manifests-repo.git',
-                branch: 'main'
-            }
-        }
-        
-        stage('Update K8S manifest & push to Repo'){
-            steps {
-                script{
-                    withCredentials([usernamePassword(credentialsId: 'f87a34a8-0e09-45e7-b9cf-6dc68feac670', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
-                        sh '''
-                        cat deploy.yaml
-                        sed -i '' "s/32/${BUILD_NUMBER}/g" deploy.yaml
-                        cat deploy.yaml
-                        git add deploy.yaml
-                        git commit -m 'Updated the deploy yaml | Jenkins Pipeline'
-                        git remote -v
-                        git push https://github.com/iam-veeramalla/cicd-demo-manifests-repo.git HEAD:main
-                        '''                        
+                script {
+                    withCredentials([usernamePassword(credentialsId: env.REGISTRY_CREDENTIALS, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                        sh """
+                        echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+                        docker push ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+                        """
                     }
+                }
+            }
+        }
+
+        stage('Update Manifests and Push') {
+            steps {
+                script {
+                    // Clone manifests repo
+                    git credentialsId: env.GIT_CREDENTIALS, url: env.MANIFESTS_REPO, branch: env.MANIFESTS_BRANCH
+                    // Update the image tag in deployment manifest
+                    sh """
+                    sed -i "s|image: ${env.IMAGE_NAME}:.*|image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}|g" deploy.yaml
+                    git add deploy.yaml
+                    git commit -m "Update image tag to ${env.IMAGE_TAG}"
+                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Tchelet/django-app-ci-cd-manifests.git HEAD:${env.MANIFESTS_BRANCH}
+                    """
                 }
             }
         }
