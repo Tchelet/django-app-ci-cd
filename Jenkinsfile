@@ -4,10 +4,10 @@ pipeline {
     environment {
         IMAGE_NAME = "tchelet/cicd"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        GIT_CREDENTIALS = '9955446b-dc74-40aa-b7e3-bfa9e8071c0a'
+        GIT_CREDENTIALS = ''
         MANIFESTS_REPO = 'https://github.com/Tchelet/django-app-ci-cd-manifests.git'
         MANIFESTS_BRANCH = 'main'
-        DOCKERHUB_CREDENTIALS = 'ea6ea248-89fc-40c6-8cbb-a2fa518887cc'  
+        DOCKERHUB_CREDENTIALS = ''  
     }
 
     stages {
